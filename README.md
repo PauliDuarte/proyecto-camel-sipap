@@ -159,10 +159,9 @@ La última decisión no corresponde a `ValidacionProcessor`. La ruta permite que
 2. **Pipes and Filters:** el mensaje pasa ordenadamente por producción, parsing, validación, auditoría, enrutamiento y procesamiento bancario.
 3. **Message Translator:** `TlvParserProcessor` convierte la cadena TLV recibida en el modelo canónico `Transferencia`.
 4. **Content-Based Router:** el `choice()` de `TransferenciaRoute` consulta `codigoEntidad` para seleccionar ITAU, ATLAS, FAMILIAR o el flujo de rechazados.
-5. **Message Filter:** los errores de parsing o validación impiden que mensajes inválidos alcancen los consumidores bancarios. El `otherwise` cumple el mismo propósito para bancos desconocidos.
-6. **Correlation Identifier:** el header `idTransaccion`, con formato como `TX000001`, se asigna al entrar en `direct:sipap-in`, se incorpora a `Transferencia` y se conserva en `ResultadoTransferencia`.
-7. **Manejo de errores / Dead Letter Channel equivalente:** `onException(IllegalArgumentException.class)` captura errores de parsing o validación, los marca como manejados y dirige un resultado rechazado a `direct:rechazados`. Es un manejo equivalente y sencillo; no se utiliza un broker ni una cola de mensajes fallidos real.
-8. **Wire Tap:** `wireTap("direct:auditoria")` envía una copia de la transferencia después del parsing y la validación, sin interrumpir el flujo principal. El tap ocurre antes del `choice()`, por lo que también audita transferencias válidas cuyo banco luego se rechaza como desconocido.
+5. **Correlation Identifier:** el header `idTransaccion`, con formato como `TX000001`, se asigna al entrar en `direct:sipap-in`, se incorpora a `Transferencia` y se conserva en `ResultadoTransferencia`.
+6. **Manejo de errores / Dead Letter Channel equivalente:** `onException(IllegalArgumentException.class)` captura errores de parsing o validación, los marca como manejados y dirige un resultado rechazado a `direct:rechazados`. Es un manejo equivalente y sencillo; no se utiliza un broker ni una cola de mensajes fallidos real.
+7. **Wire Tap:** `wireTap("direct:auditoria")` envía una copia de la transferencia después del parsing y la validación, sin interrumpir el flujo principal. El tap ocurre antes del `choice()`, por lo que también audita transferencias válidas cuyo banco luego se rechaza como desconocido.
 
 ## Escenarios de prueba
 
