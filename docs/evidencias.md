@@ -180,3 +180,21 @@ La captura muestra el rechazo de `TX000006` por monto `10000000` y el rechazo de
 ![Operaciones procesadas posteriores](imagenes/ejecucion-procesadas-adicionales.png)
 
 La captura corresponde a una rotación posterior: muestra `TX000008` procesada por ATLAS y el avance de `TX000009` hacia ITAU. Sirve como evidencia adicional de que los productores continúan rotando mientras la aplicación está activa. No muestra el cierre de Maven ni un `BUILD SUCCESS` de la ejecución.
+
+## Referencia visual del QR EMVCo
+
+Como referencia adicional, se generó un QR EMVCo utilizando los mismos datos principales de una transferencia válida dirigida a ITAU:
+
+- Root Index: Tag 32
+- Código de entidad: 0015
+- GUID: py.gov.bcp.sip
+- Cuenta: 100001
+- MCC: 5731
+- Moneda: PYG (600)
+- Monto: 150000
+- Comercio: JUAN PEREZ
+- Ciudad: ASUNCION
+
+![QR EMVCo de referencia para ITAU](imagenes/qr-emvco-itau.png)
+
+La herramienta genera automáticamente un CRC real (`3BE6` en este ejemplo). Para esta práctica, el proyecto utiliza el valor fijo `A1B2`, ya que la consigna lo define como checksum didáctico.
