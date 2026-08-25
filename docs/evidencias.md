@@ -142,3 +142,41 @@ Evidencia que el CRC diferente de `A1B2` es rechazado y no se entrega a ITAU.
 - La prueba automatizada de banco desconocido confirma explícitamente una entrega a rechazados y cero entregas a ITAU, ATLAS y FAMILIAR.
 - `TX000004`, al superar parsing y validación, también produjo `[AUDITORIA]` antes de ser rechazado por banco desconocido.
 - Los errores `TX000005`, `TX000006` y `TX000007` ocurrieron antes de `wireTap`, por lo que no fueron enviados a auditoría.
+
+## Evidencias visuales
+
+### Resultado de las pruebas
+
+![Tests ejecutados correctamente](imagenes/tests-build-success.png)
+
+La captura muestra la ejecución real de `./mvnw test`, el total de 11 tests sin fallos, errores ni omisiones, y el resultado `BUILD SUCCESS`.
+
+### Transferencia procesada por ITAU
+
+![Transferencia procesada por ITAU](imagenes/transferencias-procesadas.png)
+
+La captura muestra el flujo de `TX000001`: parsing a `Transferencia`, validación, auditoría, recepción por ITAU con código `0015` y resultado `PROCESADA`.
+
+### Transferencia procesada por ATLAS
+
+![Transferencia procesada por ATLAS](imagenes/transferencia-atlas-procesada.png)
+
+La captura muestra el flujo de `TX000002`, generado por el Productor B, y la recepción del objeto `Transferencia` por ATLAS con código `0007` y estado `PROCESADA`.
+
+### FAMILIAR y comienzo del caso de banco desconocido
+
+![FAMILIAR y banco desconocido](imagenes/transferencia-familiar-y-banco-desconocido.png)
+
+La captura demuestra que FAMILIAR procesó `TX000003`. También muestra el parsing, validación y auditoría de `TX000004` con código desconocido `9999`. El resultado final rechazado de `TX000004` no es visible en esta imagen y se demuestra mediante el log textual de la sección anterior.
+
+### Transferencias rechazadas por monto y CRC
+
+![Transferencias rechazadas](imagenes/transferencias-rechazadas.png)
+
+La captura muestra el rechazo de `TX000006` por monto `10000000` y el rechazo de `TX000007` por CRC `FFFF`. No se atribuyen a esta imagen los rechazos de banco desconocido ni longitud TLV, porque no son visibles en ella.
+
+### Operaciones procesadas posteriores
+
+![Operaciones procesadas posteriores](imagenes/ejecucion-procesadas-adicionales.png)
+
+La captura corresponde a una rotación posterior: muestra `TX000008` procesada por ATLAS y el avance de `TX000009` hacia ITAU. Sirve como evidencia adicional de que los productores continúan rotando mientras la aplicación está activa. No muestra el cierre de Maven ni un `BUILD SUCCESS` de la ejecución.
