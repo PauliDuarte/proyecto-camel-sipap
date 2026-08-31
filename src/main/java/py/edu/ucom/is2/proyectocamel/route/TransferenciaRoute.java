@@ -1,87 +1,65 @@
 package py.edu.ucom.is2.proyectocamel.route;
 
-import java.util.concurrent.atomic.AtomicLong;
+import java.time.LocalDate;
 
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.springframework.stereotype.Component;
 
-import py.edu.ucom.is2.proyectocamel.model.ResultadoTransferencia;
+import py.edu.ucom.is2.proyectocamel.model.MensajeTransferencia;
+import py.edu.ucom.is2.proyectocamel.model.RespuestaApiTransferencia;
 import py.edu.ucom.is2.proyectocamel.model.Transferencia;
+import py.edu.ucom.is2.proyectocamel.processor.MontoProcessor;
 import py.edu.ucom.is2.proyectocamel.processor.TlvParserProcessor;
 import py.edu.ucom.is2.proyectocamel.processor.ValidacionProcessor;
-import py.edu.ucom.is2.proyectocamel.service.GeneradorQrService;
 
 @Component
 public class TransferenciaRoute extends RouteBuilder {
 
-    private final GeneradorQrService generadorQrService;
     private final TlvParserProcessor tlvParserProcessor;
     private final ValidacionProcessor validacionProcessor;
-    private final AtomicLong secuencia = new AtomicLong();
+    private final MontoProcessor montoProcessor;
 
-    public TransferenciaRoute(GeneradorQrService generadorQrService,
-            TlvParserProcessor tlvParserProcessor,
-            ValidacionProcessor validacionProcessor) {
-        this.generadorQrService = generadorQrService;
+    public TransferenciaRoute(TlvParserProcessor tlvParserProcessor,
+            ValidacionProcessor validacionProcessor,
+            MontoProcessor montoProcessor) {
         this.tlvParserProcessor = tlvParserProcessor;
         this.validacionProcessor = validacionProcessor;
+        this.montoProcessor = montoProcessor;
     }
 
     @Override
     public void configure() {
-        onException(IllegalArgumentException.class)
-                .handled(true)
-                .process(exchange -> {
-                    String id = exchange.getMessage().getHeader("idTransaccion", String.class);
-                    Exception causa = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
-                    exchange.getMessage().setBody(new ResultadoTransferencia(id, "RECHAZADA", causa.getMessage()));
-                })
-                .to("direct:rechazados");
-
-        from("timer:productorA?period={{sipap.productor-a.periodo}}&delay=1000")
-                .routeId("productor-a")
-                .setBody(exchange -> generadorQrService.siguienteProductorA())
-                .log("[PRODUCTOR A] ${body}")
-                .to("direct:sipap-in");
-
-        from("timer:productorB?period={{sipap.productor-b.periodo}}&delay=2000")
-                .routeId("productor-b")
-                .setBody(exchange -> generadorQrService.siguienteProductorB())
-                .log("[PRODUCTOR B] ${body}")
-                .to("direct:sipap-in");
-
-        from("direct:sipap-in")
-                .routeId("sipap-principal")
-                .process(exchange -> exchange.getMessage().setHeader(
-                        "idTransaccion", String.format("TX%06d", secuencia.incrementAndGet())))
-                .log("[ENTRADA SIPAP] ${header.idTransaccion} - ${body}")
-                .process(tlvParserProcessor)
-                .log("[PARSEO] ${header.idTransaccion} - ${body}")
-                .process(validacionProcessor)
-                .log("[VALIDACION] ${header.idTransaccion} - transferencia válida")
-                .wireTap("direct:auditoria")
-                .choice()
-                    .when(simple("${body.merchantAccountInformation.codigoEntidad} == '0015'"))
-                        .to("direct:itau")
-                    .when(simple("${body.merchantAccountInformation.codigoEntidad} == '0007'"))
-                        .to("direct:atlas")
-                    .when(simple("${body.merchantAccountInformation.codigoEntidad} == '0020'"))
-                        .to("direct:familiar")
-                    .otherwise()
-                        .process(exchange -> {
-                            Transferencia transferencia = exchange.getMessage().getBody(Transferencia.class);
-                            exchange.getMessage().setBody(new ResultadoTransferencia(
-                                    transferencia.idTransaccion(), "RECHAZADA",
-                                    "Código de entidad desconocido: "
-                                            + transferencia.merchantAccountInformation().codigoEntidad()));
-                        })
-                        .to("direct:rechazados")
+        from("direct:api-transferencias")
+                .routeId("api-transferencias")
+                .doTry()
+                    .process(this::prepararSolicitud)
+                    .process(tlvParserProcessor)
+                    .process(validacionProcessor)
+                    .process(montoProcessor)
+                    .process(this::validarBancoConocido)
+                    .wireTap("direct:auditoria")
+                    .process(this::construirMensaje)
+                    .marshal().json()
+                    .to("jms:queue:{{sipap.cola.entrada}}")
+                    .process(exchange -> {
+                        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
+                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
+                        exchange.getMessage().setBody(new RespuestaApiTransferencia(
+                                id, "ACEPTADA_PARA_PROCESAMIENTO",
+                                "Transferencia publicada para procesamiento"));
+                    })
+                .endDoTry()
+                .doCatch(Exception.class)
+                    .process(exchange -> {
+                        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
+                        Exception causa = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
+                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
+                        exchange.getMessage().setBody(new RespuestaApiTransferencia(
+                                id, "RECHAZADA", mensajeError(causa)));
+                    })
+                    .to("direct:rechazados")
                 .end();
-
-        consumidorBanco("direct:itau", "ITAU");
-        consumidorBanco("direct:atlas", "ATLAS");
-        consumidorBanco("direct:familiar", "FAMILIAR");
 
         from("direct:rechazados")
                 .routeId("transferencias-rechazadas")
@@ -92,16 +70,49 @@ public class TransferenciaRoute extends RouteBuilder {
                 .log("[AUDITORIA] ${header.idTransaccion} - ${body}");
     }
 
-    private void consumidorBanco(String endpoint, String banco) {
-        from(endpoint)
-                .routeId("banco-" + banco.toLowerCase())
-                .log("[" + banco + "] Modelo recibido: ${body}")
-                .process(exchange -> {
-                    Transferencia transferencia = exchange.getMessage().getBody(Transferencia.class);
-                    exchange.getMessage().setBody(new ResultadoTransferencia(
-                            transferencia.idTransaccion(), "PROCESADA",
-                            "Transferencia procesada exitosamente"));
-                })
-                .log("[" + banco + "] Resultado: ${body}");
+    private void prepararSolicitud(Exchange exchange) {
+        py.edu.ucom.is2.proyectocamel.model.SolicitudTransferencia solicitud = exchange.getMessage()
+                .getBody(py.edu.ucom.is2.proyectocamel.model.SolicitudTransferencia.class);
+        if (solicitud == null) {
+            throw new IllegalArgumentException("La solicitud es obligatoria");
+        }
+        obligatorio(solicitud.idTransaccion(), "id_transaccion");
+        obligatorio(solicitud.fechaTransaccion(), "fecha_transaccion");
+        obligatorio(solicitud.qr(), "qr");
+
+        LocalDate fecha = LocalDate.parse(solicitud.fechaTransaccion());
+        exchange.getMessage().setHeader("idTransaccion", solicitud.idTransaccion());
+        exchange.getMessage().setHeader("fechaTransaccion", fecha);
+        exchange.getMessage().setHeader("montoExterno", solicitud.monto());
+        exchange.getMessage().setHeader("JMSCorrelationID", solicitud.idTransaccion());
+        exchange.getMessage().setBody(solicitud.qr());
+    }
+
+    private void validarBancoConocido(Exchange exchange) {
+        Transferencia transferencia = exchange.getMessage().getBody(Transferencia.class);
+        String codigo = transferencia.merchantAccountInformation().codigoEntidad();
+        if (!"0015".equals(codigo) && !"0007".equals(codigo) && !"0020".equals(codigo)) {
+            throw new IllegalArgumentException("Código de entidad desconocido: " + codigo);
+        }
+    }
+
+    private void construirMensaje(Exchange exchange) {
+        Transferencia transferencia = exchange.getMessage().getBody(Transferencia.class);
+        LocalDate fecha = exchange.getMessage().getHeader("fechaTransaccion", LocalDate.class);
+        exchange.getMessage().setBody(new MensajeTransferencia(
+                transferencia, fecha.toString(), transferencia.transactionAmount()));
+    }
+
+    private void obligatorio(String valor, String nombre) {
+        if (valor == null || valor.isBlank()) {
+            throw new IllegalArgumentException("Falta el campo obligatorio " + nombre);
+        }
+    }
+
+    private String mensajeError(Exception causa) {
+        if (causa == null) {
+            return "Error al procesar la transferencia";
+        }
+        return causa.getMessage() == null ? causa.getClass().getSimpleName() : causa.getMessage();
     }
 }

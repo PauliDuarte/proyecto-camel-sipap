@@ -1,0 +1,8 @@
+py/edu/ucom/is2/proyectocamel/route/BancoConsumidorRouteTest.class
+py/edu/ucom/is2/proyectocamel/processor/MontoProcessorTest.class
+py/edu/ucom/is2/proyectocamel/processor/FechaTransaccionProcessorTest.class
+py/edu/ucom/is2/proyectocamel/processor/ValidacionProcessorTest.class
+py/edu/ucom/is2/proyectocamel/processor/TlvParserProcessorTest.class
+py/edu/ucom/is2/proyectocamel/ProyectoCamelApplicationTests.class
+py/edu/ucom/is2/proyectocamel/service/GeneradorQrServiceTest.class
+py/edu/ucom/is2/proyectocamel/route/TransferenciaRouteTest.class
