@@ -1,0 +1,40 @@
+# Evidencia Tarea 2 - Monto superior al máximo
+
+## Escenario
+
+Se envió una transferencia con monto superior al máximo permitido de
+10.000.000 PYG.
+
+### Datos
+
+- ID: `TX-T2-MONTO-20260901-001`
+- Fecha: `2026-09-01`
+- Monto: `15000000`
+
+## Resultado REST
+
+La API respondió HTTP `400`.
+
+Estado:
+
+`RECHAZADA`
+
+Mensaje:
+
+`El monto supera máximo permitido`
+
+## Verificación de WireMock
+
+Se consultaron las solicitudes recibidas por WireMock buscando:
+
+`TX-T2-MONTO-20260901-001`
+
+No se encontró ninguna solicitud asociada a ese identificador.
+
+Esto demuestra que una transferencia rechazada por monto no alcanza el banco
+simulado.
+
+## Resultado
+
+La regla de monto máximo se aplicó antes del procesamiento bancario y la
+transferencia fue rechazada correctamente.
