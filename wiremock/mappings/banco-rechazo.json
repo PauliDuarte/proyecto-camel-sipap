@@ -1,0 +1,20 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/bancos/(itau|atlas|familiar)/transferencias",
+    "bodyPatterns": [
+      { "matchesJsonPath": { "expression": "$.numeroCuenta", "equalTo": "888888" } }
+    ]
+  },
+  "response": {
+    "status": 422,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "idTransaccion": "{{request.headers.X-Transaction-Id}}",
+      "estado": "RECHAZADA",
+      "mensaje": "Transferencia rechazada por el banco simulado"
+    },
+    "transformers": ["response-template"]
+  }
+}

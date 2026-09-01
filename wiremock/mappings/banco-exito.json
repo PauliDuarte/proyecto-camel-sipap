@@ -1,0 +1,17 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/bancos/(itau|atlas|familiar)/transferencias"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "idTransaccion": "{{request.headers.X-Transaction-Id}}",
+      "estado": "PROCESADA",
+      "mensaje": "Transferencia procesada por el banco simulado"
+    },
+    "transformers": ["response-template"]
+  }
+}

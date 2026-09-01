@@ -1,7 +1,5 @@
 package py.edu.ucom.is2.proyectocamel.processor;
 
-import java.math.BigDecimal;
-
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.springframework.stereotype.Component;
@@ -11,8 +9,6 @@ import py.edu.ucom.is2.proyectocamel.model.Transferencia;
 
 @Component
 public class ValidacionProcessor implements Processor {
-
-    private static final BigDecimal MONTO_MAXIMO = new BigDecimal("10000000");
 
     @Override
     public void process(Exchange exchange) {
@@ -59,11 +55,8 @@ public class ValidacionProcessor implements Processor {
             throw new IllegalArgumentException("transactionAmount es obligatorio para QR dinámico");
         }
         if (transferencia.transactionAmount() != null) {
-            if (transferencia.transactionAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            if (transferencia.transactionAmount().signum() <= 0) {
                 throw new IllegalArgumentException("transactionAmount debe ser positivo");
-            }
-            if (transferencia.transactionAmount().compareTo(MONTO_MAXIMO) >= 0) {
-                throw new IllegalArgumentException("transactionAmount debe ser menor a 10000000");
             }
         }
         if (!"A1B2".equals(transferencia.crc())) {

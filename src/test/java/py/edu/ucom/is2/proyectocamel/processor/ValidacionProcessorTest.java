@@ -26,13 +26,10 @@ class ValidacionProcessorTest {
     }
 
     @Test
-    void rechazaMontoIgualAlLimite() throws Exception {
+    void permiteMontoIgualAlLimitePorqueLaReglaSeEvaluaAntesDeArtemis() throws Exception {
         Transferencia transferencia = parsear(generador.generarQrDinamico("0007", "200002", "10000000", "A1B2"));
 
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> validador.validar(transferencia));
-
-        assertEquals("transactionAmount debe ser menor a 10000000", error.getMessage());
+        assertDoesNotThrow(() -> validador.validar(transferencia));
     }
 
     @Test
