@@ -1,0 +1,10 @@
+
+# Maven build
+/target/
+
+# Maven wrapper downloaded distribution
+/.mvn/wrapper/apache-maven-3.9.11/
+/.mvn/wrapper/apache-maven-3.9.11-bin.zip
+
+# macOS
+.DS_Store
