@@ -88,7 +88,9 @@ Cuando la solicitud se rechaza antes de publicarse, la API conserva el identific
 }
 ```
 
-## Flujo
+## Flujo resumido
+
+El diagrama completo de arquitectura y sus decisiones está disponible en [docs/diagrama-tarea2.md](docs/diagrama-tarea2.md).
 
 ```mermaid
 flowchart TD
