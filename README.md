@@ -5,7 +5,7 @@
 - Ana Paula Duarte
 - Steven Gracia Ayala
 
-## Objetivo
+## Objetivo de la Tarea 2
 
 El proyecto académico simula transferencias SIPAP recibidas por REST. Apache Camel coordina el parsing de cadenas QR TLV, las validaciones, la publicación y el consumo mediante Apache ActiveMQ Artemis y la invocación Request-Reply de un banco simulado con WireMock.
 
@@ -17,7 +17,9 @@ La Tarea 2 evoluciona la solución de la Tarea 1: conserva el parser TLV, el mod
 - Spring Boot 3.5.3
 - Apache Camel 4.14.9
 - Apache ActiveMQ Artemis 2.44.0
+- JMS
 - WireMock 3.13.1
+- Docker Compose
 - Maven
 - Java DSL
 - JUnit 5
@@ -28,6 +30,7 @@ Se requiere Java 21 y Docker con Docker Compose.
 
 ```bash
 docker compose up -d
+docker compose ps
 ./mvnw test
 ./mvnw spring-boot:run
 ```
@@ -36,6 +39,7 @@ En Windows:
 
 ```bat
 docker compose up -d
+docker compose ps
 mvnw.cmd test
 mvnw.cmd spring-boot:run
 ```
@@ -56,7 +60,7 @@ La conexión JMS anónima se permite únicamente para este entorno didáctico.
 ```json
 {
   "id_transaccion": "TX000001",
-  "fecha_transaccion": "2026-08-25",
+  "fecha_transaccion": "2026-09-02",
   "qr": "00020101021232360014py.gov.bcp.sip01040015020610000152045731530360054061500005802PY5910JUAN PEREZ6008ASUNCION6304A1B2",
   "monto": "150000"
 }
@@ -73,6 +77,16 @@ Respuesta inmediata cuando el mensaje se publica:
 ```
 
 La respuesta confirma la publicación, no el resultado final del banco, porque el procesamiento posterior es asíncrono.
+
+Cuando la solicitud se rechaza antes de publicarse, la API conserva el identificador y devuelve HTTP `400`. Por ejemplo:
+
+```json
+{
+  "id_transaccion": "TX000002",
+  "estado": "RECHAZADA",
+  "mensaje": "El monto supera máximo permitido"
+}
+```
 
 ## Flujo
 
@@ -130,6 +144,15 @@ WireMock recibe `POST /bancos/{banco}/transferencias`, el header `X-Transaction-
 - cuenta reservada `888888`: HTTP 422, `RECHAZADA`;
 - cuenta reservada `999999`: HTTP 500, `ERROR_BANCO`.
 
+## Estados implementados
+
+- `ACEPTADA_PARA_PROCESAMIENTO`: la API validó y publicó la transferencia para su procesamiento asíncrono.
+- `RECHAZADA`: la solicitud fue rechazada antes de Artemis o el banco respondió HTTP 422.
+- `PROCESADA`: el banco simulado respondió exitosamente.
+- `RECHAZADA_FECHA`: la fecha no coincide con la fecha actual de `America/Asuncion`.
+- `DUPLICADA`: el `id_transaccion` ya fue procesado por la instancia actual.
+- `ERROR_BANCO`: la invocación al banco simulado terminó con un error distinto del rechazo HTTP 422.
+
 ## Patrones EIP
 
 - Message Channel: las colas Artemis desacoplan API, distribuidor y consumidores.
@@ -141,7 +164,25 @@ WireMock recibe `POST /bancos/{banco}/transferencias`, el header `X-Transaction-
 - Request-Reply: el consumidor realiza un POST síncrono al banco mock.
 - Wire Tap: audita transferencias validadas antes de publicarlas.
 
-El repositorio idempotente vive solamente en memoria: se pierde al reiniciar y no coordina múltiples instancias.
+## Idempotencia
+
+El Idempotent Receiver usa `id_transaccion` como clave. El repositorio idempotente vive solamente en memoria: sus datos se pierden al reiniciar la aplicación y no se comparten entre varias instancias. Por esa razón, esta implementación académica no garantiza idempotencia global al escalar horizontalmente.
+
+## Pruebas
+
+La suite automatizada se ejecuta con:
+
+```bash
+./mvnw test
+```
+
+## Evidencias
+
+- [Flujo válido de ITAU](docs/evidencia-tarea2-flujo-valido.md)
+- [Idempotencia y transferencia duplicada](docs/evidencia-tarea2-duplicado.md)
+- [Rechazo por fecha inválida](docs/evidencia-tarea2-fecha-invalida.md)
+- [Respuestas del banco simulado](docs/evidencia-tarea2-respuestas-banco-mock.md)
+- [Rechazo por monto superior al máximo](<docs/evidencia-tarea2-monto-rechazado.md%20%20%20%20%20>)
 
 ## Estructura principal
 
