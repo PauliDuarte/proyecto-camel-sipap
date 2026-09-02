@@ -42,22 +42,10 @@ public class TransferenciaRoute extends RouteBuilder {
                     .process(this::construirMensaje)
                     .marshal().json()
                     .to("jms:queue:{{sipap.cola.entrada}}")
-                    .process(exchange -> {
-                        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
-                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
-                        exchange.getMessage().setBody(new RespuestaApiTransferencia(
-                                id, "ACEPTADA_PARA_PROCESAMIENTO",
-                                "Transferencia publicada para procesamiento"));
-                    })
+                    .process(this::responderAceptada)
                 .endDoTry()
                 .doCatch(Exception.class)
-                    .process(exchange -> {
-                        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
-                        Exception causa = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
-                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
-                        exchange.getMessage().setBody(new RespuestaApiTransferencia(
-                                id, "RECHAZADA", mensajeError(causa)));
-                    })
+                    .process(this::responderRechazada)
                     .to("direct:rechazados")
                 .end();
 
@@ -101,6 +89,24 @@ public class TransferenciaRoute extends RouteBuilder {
         LocalDate fecha = exchange.getMessage().getHeader("fechaTransaccion", LocalDate.class);
         exchange.getMessage().setBody(new MensajeTransferencia(
                 transferencia, fecha.toString(), transferencia.transactionAmount()));
+    }
+
+    private void responderAceptada(Exchange exchange) {
+        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
+        exchange.getMessage().removeHeaders("*");
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
+        exchange.getMessage().setBody(new RespuestaApiTransferencia(
+                id, "ACEPTADA_PARA_PROCESAMIENTO",
+                "Transferencia publicada para procesamiento"));
+    }
+
+    private void responderRechazada(Exchange exchange) {
+        String id = exchange.getMessage().getHeader("idTransaccion", String.class);
+        Exception causa = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class);
+        exchange.getMessage().removeHeaders("*");
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
+        exchange.getMessage().setBody(new RespuestaApiTransferencia(
+                id, "RECHAZADA", mensajeError(causa)));
     }
 
     private void obligatorio(String valor, String nombre) {

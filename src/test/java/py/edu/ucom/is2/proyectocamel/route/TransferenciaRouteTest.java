@@ -1,6 +1,7 @@
 package py.edu.ucom.is2.proyectocamel.route;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.math.BigDecimal;
@@ -8,6 +9,7 @@ import java.time.LocalDate;
 import java.util.Properties;
 
 import org.apache.camel.CamelContext;
+import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.builder.AdviceWith;
 import org.apache.camel.component.mock.MockEndpoint;
@@ -66,12 +68,17 @@ class TransferenciaRouteTest {
             entrada.expectedHeaderReceived("idTransaccion", id);
             context.start();
             try (ProducerTemplate producer = context.createProducerTemplate()) {
-                Object body = producer.requestBody("direct:api-transferencias",
-                        solicitud(id, generador.generarQrDinamico(
-                                "0015", "100001", monto, "A1B2"), monto));
-                RespuestaApiTransferencia respuesta = assertInstanceOf(RespuestaApiTransferencia.class, body);
+                Exchange exchange = producer.request("direct:api-transferencias", mensaje -> {
+                    mensaje.getMessage().setHeader("JMSMessageID", "ID:interno");
+                    mensaje.getMessage().setHeader("Matched-Stub-Id", "stub-interno");
+                    mensaje.getMessage().setBody(solicitud(id, generador.generarQrDinamico(
+                            "0015", "100001", monto, "A1B2"), monto));
+                });
+                RespuestaApiTransferencia respuesta = assertInstanceOf(
+                        RespuestaApiTransferencia.class, exchange.getMessage().getBody());
                 assertEquals(id, respuesta.idTransaccion());
                 assertEquals("ACEPTADA_PARA_PROCESAMIENTO", respuesta.estado());
+                assertHeadersInternosEliminados(exchange);
                 MockEndpoint.assertIsSatisfied(context);
             }
         }
@@ -85,11 +92,17 @@ class TransferenciaRouteTest {
             entrada.expectedMessageCount(0);
             context.start();
             try (ProducerTemplate producer = context.createProducerTemplate()) {
-                Object body = producer.requestBody("direct:api-transferencias", solicitud);
-                RespuestaApiTransferencia respuesta = assertInstanceOf(RespuestaApiTransferencia.class, body);
+                Exchange exchange = producer.request("direct:api-transferencias", intercambio -> {
+                    intercambio.getMessage().setHeader("JMSMessageID", "ID:interno");
+                    intercambio.getMessage().setHeader("banco", "interno");
+                    intercambio.getMessage().setBody(solicitud);
+                });
+                RespuestaApiTransferencia respuesta = assertInstanceOf(
+                        RespuestaApiTransferencia.class, exchange.getMessage().getBody());
                 assertEquals("RECHAZADA", respuesta.estado());
                 assertEquals(mensaje, respuesta.mensaje());
                 assertEquals(solicitud.idTransaccion(), respuesta.idTransaccion());
+                assertHeadersInternosEliminados(exchange);
                 MockEndpoint.assertIsSatisfied(context);
             }
         }
@@ -107,5 +120,16 @@ class TransferenciaRouteTest {
 
     private SolicitudTransferencia solicitud(String id, String qr, String monto) {
         return new SolicitudTransferencia(id, LocalDate.now().toString(), qr, monto);
+    }
+
+    private void assertHeadersInternosEliminados(Exchange exchange) {
+        for (String header : java.util.List.of(
+                "JMSMessageID", "JMSDestination", "JMSReplyTo", "JMSCorrelationID",
+                "JMSDeliveryMode", "JMSPriority", "JMSRedelivered", "JMSXDeliveryCount",
+                "Matched-Stub-Id", "X-Transaction-Id", "banco", "fechaValida",
+                "montoEfectivo", "montoExterno", "idTransaccion")) {
+            assertFalse(exchange.getMessage().getHeaders().containsKey(header),
+                    "No debe exponerse el header interno " + header);
+        }
     }
 }
